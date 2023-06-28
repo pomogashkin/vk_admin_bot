@@ -1,19 +1,21 @@
-import vk_api
-from vk_api.audio import VkAudio
-from tqdm import tqdm
-from pinscrape import pinscrape
-
-import random
-import os
-import requests
-import time 
 import datetime
+import os
+import random
+import time
 
+import requests
+import vk_api
 from dotenv import load_dotenv
+from pinscrape import pinscrape
+from tqdm import tqdm
+from vk_api.audio import VkAudio
+
 load_dotenv()
 
+GROUP = os.getenv('GROUP')
 URL = os.getenv('URL')
 ME = os.getenv('ME')
+ALBUM_ID = os.getenv('ALBUM_ID')
 
 def delete_trash(dir):
     for f in os.listdir(dir):
@@ -21,17 +23,26 @@ def delete_trash(dir):
     
 
 def get_word():
+    """Получение случайного слова
+
+    Returns:
+        str: случайное слово
+    """    
     try:
         response = requests.get(URL)
     except Exception:
         time.sleep(10)
-        response = requests.get(URL)
+        get_word()
 
     response = response.json()
-    word = response[0]
-    return word
+    return response[0]
 
 def get_img():
+    """Скачивание 5 случайных картинок по случайному слову
+
+    Returns:
+        str: случайное слово
+    """    
     delete_trash('./output/')
     details = None
     word = get_word()
@@ -50,15 +61,35 @@ def get_img():
     return word
 
 def get_tracks(vk_session, owner):
-    return [item['id'] for item in tqdm(VkAudio(vk_session).get_iter(owner_id=owner))]
+    """Получение списка  id всех добавленных песен пользователя
+
+    Args:
+        vk_session (_type_): сессия 
+        owner (_type_): пользователь
+
+    Returns:
+        list: список id песен
+    """    
+    tracks = []
+    try: 
+        for item in tqdm(VkAudio(vk_session).get_iter(owner_id=owner)):
+            tracks.append(item['id'])
+    except Exception as error:
+        print(error)
+        pass
+        
+    return tracks
 
 
-def auth_handler():
+def auth_handler(): 
     key = input("Enter authentication code: ")
     remember_device = True
     return key, remember_device
 
 def main():
+    """
+    Главная функция.
+    """
     login, password = os.getenv('LOGIN'), os.getenv('PASSWORD')
     vk_session = vk_api.VkApi(login, password, auth_handler=auth_handler)
     try:
@@ -78,15 +109,15 @@ def main():
         for item in os.listdir('./output/'):
             photo = upload.photo( 
                 f'./output/{item}',
-                album_id=295514739,
-                group_id=221221426
+                album_id=ALBUM_ID,
+                group_id=GROUP
             )
-            attachments += ',photo-221221426_{}'.format(str(photo[0]['id']))
+            attachments += ',photo{}_{}'.format(GROUP, str(photo[0]['id']))
         
         
         print(
             vk_session.get_api().wall.post(
-                owner_id=-221221426, 
+                owner_id=GROUP, 
                 message=word, 
                 attachments=attachments
             )
@@ -94,7 +125,7 @@ def main():
         if datetime.datetime.now() == last_update + datetime.timedelta(7):
             tracks = get_tracks(vk_session)
             last_update = datetime.datetime.now()
-        time.sleep(3600)
+        time.sleep(3600 * 3)
 
 
 if __name__ == '__main__':
